@@ -428,7 +428,14 @@ def detect_preference_drift(db, user_id: str, context: str, window: int = 30, th
     rows = list(
         db.scalars(
             select(DecisionOutcome)
-            .where(DecisionOutcome.user_id == user_id)
+            .join(
+                RecommendationDecision,
+                DecisionOutcome.decision_id == RecommendationDecision.id,
+            )
+            .where(
+                RecommendationDecision.user_id == user_id,
+                RecommendationDecision.context_key == context,
+            )
             .order_by(DecisionOutcome.created_at.desc())
             .limit(window * 2)
         )
