@@ -1,0 +1,52 @@
+services:
+  web:
+    build: {context: ../.., dockerfile: platform/docker/web.Dockerfile}
+    ports: ["3000:3000"]
+    environment: ["NEXT_PUBLIC_API_URL=http://localhost:8000"]
+    depends_on: [api]
+  api:
+    build: {context: ../../backend, dockerfile: ../platform/docker/api.Dockerfile}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports: ["8000:8000"]
+    env_file: ["../../.env"]
+    environment: ["DATABASE_URL=mysql+pymysql://ootd:ootd@mysql:3306/ootd?charset=utf8mb4", "LANGGRAPH_CHECKPOINT_URL=mysql://ootd:ootd@mysql:3306/ootd_checkpoints?charset=utf8mb4", "REDIS_URL=redis://redis:6379/0"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_started}
+  worker:
+    build: {context: ../../backend, dockerfile: ../platform/docker/api.Dockerfile}
+    command: celery -A app.tasks.celery_app worker --loglevel=INFO
+    env_file: ["../../.env"]
+    environment: ["DATABASE_URL=mysql+pymysql://ootd:ootd@mysql:3306/ootd?charset=utf8mb4", "LANGGRAPH_CHECKPOINT_URL=mysql://ootd:ootd@mysql:3306/ootd_checkpoints?charset=utf8mb4", "REDIS_URL=redis://redis:6379/0"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_started}
+  scheduler:
+    build: {context: ../../backend, dockerfile: ../platform/docker/api.Dockerfile}
+    command: celery -A app.tasks.celery_app beat --loglevel=INFO
+    env_file: ["../../.env"]
+    environment: ["DATABASE_URL=mysql+pymysql://ootd:ootd@mysql:3306/ootd?charset=utf8mb4", "LANGGRAPH_CHECKPOINT_URL=mysql://ootd:ootd@mysql:3306/ootd_checkpoints?charset=utf8mb4", "REDIS_URL=redis://redis:6379/0"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_started}
+  mysql:
+    image: mysql:8.4
+    ports: ["${MYSQL_PORT:-3306}:3306"]
+    environment:
+      MYSQL_DATABASE: ootd
+      MYSQL_USER: ootd
+      MYSQL_PASSWORD: ootd
+      MYSQL_ROOT_PASSWORD: root
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../database/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+volumes: {mysql_data: {}}

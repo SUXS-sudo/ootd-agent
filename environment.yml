@@ -1,0 +1,12 @@
+name: ootd-agent
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.12
+  - nodejs=22
+  - pip>=24.3
+  - pip:
+      - -r backend/requirements.txt
